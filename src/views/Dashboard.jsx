@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, FileText, SearchCheck, Globe, Loader2, Compass, UserPlus, CheckCircle2, Bell } from 'lucide-react';
 
-const API_BASE_URL = '//https://rescover-backend.onrender.com';
+const API_BASE_URL = 'https://rescover-backend.onrender.com';
 
 export default function Dashboard({ user, onOpenPaper }) {
   const [activeTab, setActiveTab] = useState('drafts');
