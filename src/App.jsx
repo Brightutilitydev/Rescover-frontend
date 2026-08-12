@@ -11,12 +11,23 @@ export default function App() {
   });
 
   const [isRegistering, setIsRegistering] = useState(false);
-  const [activePaperId, setActivePaperId] = useState(null);
+  
+  // Phase 4 FIX: Persist active paper so reloading doesn't kick you out
+  const [activePaperId, setActivePaperId] = useState(() => {
+    return localStorage.getItem('rescover_active_paper') || null;
+  });
 
+  // Save login state
   useEffect(() => {
     if (user) localStorage.setItem('rescover_user', JSON.stringify(user));
     else localStorage.removeItem('rescover_user');
   }, [user]);
+
+  // Save active paper state
+  useEffect(() => {
+    if (activePaperId) localStorage.setItem('rescover_active_paper', activePaperId);
+    else localStorage.removeItem('rescover_active_paper');
+  }, [activePaperId]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">

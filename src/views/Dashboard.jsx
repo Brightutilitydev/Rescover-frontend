@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, FileText, SearchCheck, Globe, Loader2, Compass, UserPlus, CheckCircle2, Bell } from 'lucide-react';
+import { Plus, FileText, Globe, Loader2, Compass, UserPlus, CheckCircle2, Bell, Users, X, Award } from 'lucide-react';
 
 const API_BASE_URL = 'https://rescover-backend.onrender.com';
 
@@ -8,11 +8,18 @@ export default function Dashboard({ user, onOpenPaper }) {
   const [activeTab, setActiveTab] = useState('drafts');
   const [papers, setPapers] = useState({ drafts: [], discover: [], in_review: [], published: [] });
   const [notifications, setNotifications] = useState([]);
+  const [scholars, setScholars] = useState([]); // Phase 4 Directory
+  
   const [showNotifs, setShowNotifs] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  
+  // Phase 4 Portfolio Modal States
+  const [selectedScholar, setSelectedScholar] = useState(null);
+  const [scholarPortfolio, setScholarPortfolio] = useState([]);
+  const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(false);
 
   const fetchPapers = async () => {
     try {
@@ -28,10 +35,26 @@ export default function Dashboard({ user, onOpenPaper }) {
     } catch (err) { }
   };
 
+  const fetchScholars = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/scholars`);
+      setScholars(res.data);
+    } catch (err) { }
+  };
+
+  // Phase 4 FIX: Background Polling for real-time updates on Dashboard
   useEffect(() => {
     fetchPapers();
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5000);
+    fetchScholars();
+    
+    // Refresh data every 5 seconds silently so users see approvals instantly
+    const interval = setInterval(() => {
+      fetchPapers();
+      fetchNotifications();
+      fetchScholars();
+    }, 5000);
+    
     return () => clearInterval(interval);
   }, [user]);
 
@@ -43,8 +66,9 @@ export default function Dashboard({ user, onOpenPaper }) {
   const handleCreateResearch = async (e) => {
     e.preventDefault(); setIsCreating(true);
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/create`, { title: newTitle, author_name: user.fullname });
+      const res = await axios.post(`${API_BASE_URL}/api/papers/create`, { title: newTitle, author_name: user.fullname });
       setNewTitle(''); setIsModalOpen(false); fetchPapers();
+      onOpenPaper(res.data.paper.id); // Auto-open after creating
     } catch (err) { } finally { setIsCreating(false); }
   };
 
@@ -64,10 +88,21 @@ export default function Dashboard({ user, onOpenPaper }) {
     } catch (err) { }
   };
 
+  // Phase 4 Portfolio Viewer
+  const handleViewScholar = async (scholarName) => {
+    setSelectedScholar(scholarName);
+    setIsLoadingPortfolio(true);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/scholars/${encodeURIComponent(scholarName)}/portfolio`);
+      setScholarPortfolio(res.data);
+    } catch (err) { } finally { setIsLoadingPortfolio(false); }
+  };
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6">
+      {/* Header Area */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Research Hub</h2>
@@ -106,60 +141,124 @@ export default function Dashboard({ user, onOpenPaper }) {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex space-x-2 border-b border-slate-200 overflow-x-auto">
         <TabButton active={activeTab === 'drafts'} onClick={() => setActiveTab('drafts')} icon={FileText} label="My Workspace" count={papers.drafts.length} />
         <TabButton active={activeTab === 'discover'} onClick={() => setActiveTab('discover')} icon={Compass} label="Discover Projects" count={papers.discover.length} />
-        <TabButton active={activeTab === 'in_review'} onClick={() => setActiveTab('in_review')} icon={SearchCheck} label="In Review" count={papers.in_review.length} />
         <TabButton active={activeTab === 'published'} onClick={() => setActiveTab('published')} icon={Globe} label="Published Works" count={papers.published.length} />
+        <TabButton active={activeTab === 'scholars'} onClick={() => setActiveTab('scholars')} icon={Users} label="Scholar Network" count={scholars.length} />
       </div>
 
       {isLoading ? (
         <div className="py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-teal-600" /></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {papers[activeTab].length === 0 ? (
-            <div className="col-span-full py-12 text-center text-slate-500 bg-white border border-slate-200 border-dashed rounded-xl">No research papers found in this category.</div>
+          
+          {/* SCHOLAR DIRECTORY TAB */}
+          {activeTab === 'scholars' ? (
+             scholars.length === 0 ? (
+               <div className="col-span-full py-12 text-center text-slate-500 bg-white border border-slate-200 border-dashed rounded-xl">No scholars found.</div>
+             ) : (
+               scholars.map(scholar => (
+                 <div key={scholar.email} onClick={() => handleViewScholar(scholar.fullname)} className="bg-white border border-slate-200 hover:border-teal-400 hover:shadow-md cursor-pointer rounded-xl p-5 flex items-center space-x-4 transition">
+                   <div className="h-12 w-12 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-lg">
+                     {scholar.fullname.charAt(0).toUpperCase()}
+                   </div>
+                   <div>
+                     <h3 className="font-bold text-slate-900">{scholar.fullname}</h3>
+                     <p className="text-xs text-slate-500">{scholar.email}</p>
+                     <p className="text-[10px] uppercase font-bold text-teal-600 mt-1 tracking-wider">View Portfolio</p>
+                   </div>
+                 </div>
+               ))
+             )
           ) : (
-            papers[activeTab].map((paper) => (
-              <div key={paper.id} onClick={() => (activeTab === 'drafts' || activeTab === 'in_review') && onOpenPaper(paper.id)} className={`bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between transition-colors ${activeTab === 'drafts' ? 'cursor-pointer hover:border-teal-400 hover:shadow-md' : ''}`}>
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-teal-600">{paper.status.replace('_', ' ')}</div>
-                    {activeTab === 'drafts' && paper.owner_name === user.fullname && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Owner</span>}
-                    {activeTab === 'drafts' && paper.owner_name !== user.fullname && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Co-Author</span>}
+            /* PAPERS TABS */
+            papers[activeTab].length === 0 ? (
+              <div className="col-span-full py-12 text-center text-slate-500 bg-white border border-slate-200 border-dashed rounded-xl">No documents found in this category.</div>
+            ) : (
+              papers[activeTab].map((paper) => (
+                <div key={paper.id} onClick={() => (activeTab === 'drafts' || activeTab === 'published') && onOpenPaper(paper.id)} className={`bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between transition-colors ${(activeTab === 'drafts' || activeTab === 'published') ? 'cursor-pointer hover:border-teal-400 hover:shadow-md' : ''}`}>
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-teal-600">{paper.status.replace('_', ' ')}</div>
+                      {activeTab === 'drafts' && paper.owner_name === user.fullname && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Owner</span>}
+                      {activeTab === 'drafts' && paper.owner_name !== user.fullname && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Co-Author</span>}
+                    </div>
+                    <h3 className="font-bold text-slate-900 leading-tight mb-3">{paper.title}</h3>
+                    <p className="text-xs text-slate-500 mb-1">Lead Author: <span className="font-semibold text-slate-700">{paper.owner_name}</span></p>
+                    {paper.co_authors && paper.co_authors.length > 0 && <p className="text-xs text-slate-500">Team: <span className="text-slate-600">{paper.co_authors.join(', ')}</span></p>}
                   </div>
-                  <h3 className="font-bold text-slate-900 leading-tight mb-3">{paper.title}</h3>
-                  <p className="text-xs text-slate-500 mb-1">Lead Author: <span className="font-semibold text-slate-700">{paper.owner_name}</span></p>
-                  {paper.co_authors && paper.co_authors.length > 0 && <p className="text-xs text-slate-500">Team: <span className="text-slate-600">{paper.co_authors.join(', ')}</span></p>}
+
+                  {activeTab === 'discover' && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      {paper.pending_requests?.includes(user.fullname) ? (
+                        <div className="w-full py-2 bg-slate-100 text-slate-500 text-xs font-bold rounded flex justify-center items-center space-x-1"><Loader2 className="h-3 w-3 animate-spin" /><span>Request Pending...</span></div>
+                      ) : (
+                        <button onClick={(e) => handleRequestJoin(paper.id, e)} className="w-full py-2 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold rounded flex items-center justify-center space-x-2"><UserPlus className="h-4 w-4" /><span>Request to Co-Author</span></button>
+                      )}
+                    </div>
+                  )}
+
+                  {activeTab === 'drafts' && paper.owner_name === user.fullname && paper.pending_requests?.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
+                      {paper.pending_requests.map(requester => (
+                        <div key={requester} className="flex justify-between items-center bg-amber-50 px-3 py-2 rounded border border-amber-100">
+                          <span className="text-xs font-semibold text-amber-900">{requester}</span>
+                          <button onClick={(e) => handleApproveJoin(paper.id, requester, e)} className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold flex items-center space-x-1"><CheckCircle2 className="h-3 w-3" /><span>Approve</span></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {activeTab === 'discover' && (
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    {paper.pending_requests?.includes(user.fullname) ? (
-                      <div className="w-full py-2 bg-slate-100 text-slate-500 text-xs font-bold rounded flex justify-center items-center space-x-1"><Loader2 className="h-3 w-3 animate-spin" /><span>Request Pending...</span></div>
-                    ) : (
-                      <button onClick={(e) => handleRequestJoin(paper.id, e)} className="w-full py-2 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold rounded flex items-center justify-center space-x-2"><UserPlus className="h-4 w-4" /><span>Request to Co-Author</span></button>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'drafts' && paper.owner_name === user.fullname && paper.pending_requests?.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Approvals</p>
-                    {paper.pending_requests.map(requester => (
-                      <div key={requester} className="flex justify-between items-center bg-amber-50 px-3 py-2 rounded border border-amber-100">
-                        <span className="text-xs font-semibold text-amber-900">{requester}</span>
-                        <button onClick={(e) => handleApproveJoin(paper.id, requester, e)} className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold flex items-center space-x-1"><CheckCircle2 className="h-3 w-3" /><span>Approve</span></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))
+              ))
+            )
           )}
         </div>
       )}
 
+      {/* SCHOLAR PORTFOLIO MODAL */}
+      {selectedScholar && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="bg-slate-900 p-6 flex justify-between items-center text-white">
+              <div className="flex items-center space-x-4">
+                <div className="h-12 w-12 rounded-full bg-teal-600 border-2 border-white flex items-center justify-center font-bold text-lg">
+                  {selectedScholar.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="font-bold text-xl">{selectedScholar}</h3>
+                  <p className="text-xs text-teal-300 font-bold uppercase tracking-wider">Public Portfolio</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedScholar(null)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-full"><X className="h-5 w-5"/></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto bg-slate-50 flex-1">
+              {isLoadingPortfolio ? (
+                <div className="py-10 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-teal-600" /></div>
+              ) : scholarPortfolio.length === 0 ? (
+                <div className="text-center py-12">
+                  <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 font-medium">No published works yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {scholarPortfolio.map(paper => (
+                    <div key={paper.id} onClick={() => onOpenPaper(paper.id)} className="bg-white p-4 rounded-xl border border-slate-200 hover:border-teal-400 cursor-pointer shadow-sm transition">
+                      <h4 className="font-bold text-slate-900 mb-1">{paper.title}</h4>
+                      <p className="text-xs text-slate-500">Lead Author: {paper.owner_name}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE PAPER MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
