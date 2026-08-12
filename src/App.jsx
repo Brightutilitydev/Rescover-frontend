@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Microscope, LogOut } from 'lucide-react';
-import AuthGateway from './views/AuthGateway';
-import Dashboard from './views/Dashboard';
-import WorkbenchView from './views/WorkbenchView';
+import AuthGateway from './AuthGateway';
+import Dashboard from './Dashboard';
+import WorkbenchView from './WorkbenchView';
 
 export default function App() {
   const [user, setUser] = useState(() => {
     const cached = localStorage.getItem('rescover_user');
     return cached ? JSON.parse(cached) : null;
   });
-
+  
   const [isRegistering, setIsRegistering] = useState(false);
   
-  // Phase 4 FIX: Persist active paper so reloading doesn't kick you out
+  // Navigation State: If this has an ID, the Workspace opens!
   const [activePaperId, setActivePaperId] = useState(() => {
     return localStorage.getItem('rescover_active_paper') || null;
-  });
+  }); 
 
-  // Save login state
   useEffect(() => {
     if (user) localStorage.setItem('rescover_user', JSON.stringify(user));
     else localStorage.removeItem('rescover_user');
@@ -56,10 +55,18 @@ export default function App() {
         {!user ? (
           <AuthGateway isRegistering={isRegistering} onAuthSuccess={setUser} />
         ) : (
+          /* Router Logic: Show Workbench if a paper is clicked, otherwise show Dashboard */
           activePaperId ? (
-            <WorkbenchView user={user} paperId={activePaperId} onBack={() => setActivePaperId(null)} />
+            <WorkbenchView 
+              user={user} 
+              paperId={activePaperId} 
+              onBack={() => setActivePaperId(null)} 
+            />
           ) : (
-            <Dashboard user={user} onOpenPaper={setActivePaperId} />
+            <Dashboard 
+              user={user} 
+              onOpenPaper={setActivePaperId} 
+            />
           )
         )}
       </main>
