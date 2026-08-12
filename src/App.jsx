@@ -1,37 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { Microscope, LogOut } from 'lucide-react';
-import AuthGateway from './AuthGateway';
-import Dashboard from './Dashboard';
-import WorkbenchView from './WorkbenchView';
+import AuthGateway from './views/AuthGateway';
+import Dashboard from './views/Dashboard';
+import WorkbenchView from './views/WorkbenchView';
 
 export default function App() {
   const [user, setUser] = useState(() => {
     const cached = localStorage.getItem('rescover_user');
     return cached ? JSON.parse(cached) : null;
   });
-  
+
   const [isRegistering, setIsRegistering] = useState(false);
-  
-  // Navigation State: If this has an ID, the Workspace opens!
+  const [view, setView] = useState(() => localStorage.getItem('rescover_view') || 'dashboard');
   const [activePaperId, setActivePaperId] = useState(() => {
     return localStorage.getItem('rescover_active_paper') || null;
-  }); 
+  });
 
   useEffect(() => {
     if (user) localStorage.setItem('rescover_user', JSON.stringify(user));
     else localStorage.removeItem('rescover_user');
   }, [user]);
 
-  // Save active paper state
   useEffect(() => {
     if (activePaperId) localStorage.setItem('rescover_active_paper', activePaperId);
     else localStorage.removeItem('rescover_active_paper');
   }, [activePaperId]);
 
+  useEffect(() => {
+    if (view === 'dashboard') localStorage.removeItem('rescover_view');
+    else localStorage.setItem('rescover_view', view);
+  }, [view]);
+
+  const openDashboard = () => {
+    setActivePaperId(null);
+    setView('dashboard');
+  };
+
+  const openWorkbench = (paperId) => {
+    setActivePaperId(paperId);
+    setView('workbench');
+  };
+
+  const renderCurrentView = () => {
+    if (!user) {
+      return <AuthGateway isRegistering={isRegistering} onAuthSuccess={setUser} />;
+    }
+
+    if (view === 'workbench' && activePaperId) {
+      return <WorkbenchView user={user} paperId={activePaperId} onBack={openDashboard} />;
+    }
+
+    return <Dashboard user={user} onOpenPaper={openWorkbench} />;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <header className="bg-slate-950 text-white py-4 px-6 flex justify-between items-center shadow-md">
-        <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActivePaperId(null)}>
+        <div className="flex items-center space-x-3 cursor-pointer" onClick={openDashboard}>
           <div className="bg-teal-600 p-2 rounded-lg"><Microscope className="h-6 w-6" /></div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">Rescover</h1>
@@ -41,7 +66,10 @@ export default function App() {
         {user ? (
           <div className="flex items-center space-x-4">
             <div className="text-right"><p className="text-sm font-bold">{user.fullname}</p></div>
-            <button onClick={() => {setUser(null); setActivePaperId(null);}} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition"><LogOut className="h-5 w-5" /></button>
+            <button onClick={() => {
+              setUser(null);
+              openDashboard();
+            }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition"><LogOut className="h-5 w-5" /></button>
           </div>
         ) : (
           <div className="space-x-4">
@@ -52,23 +80,7 @@ export default function App() {
       </header>
 
       <main className="flex-1 flex flex-col p-6">
-        {!user ? (
-          <AuthGateway isRegistering={isRegistering} onAuthSuccess={setUser} />
-        ) : (
-          /* Router Logic: Show Workbench if a paper is clicked, otherwise show Dashboard */
-          activePaperId ? (
-            <WorkbenchView 
-              user={user} 
-              paperId={activePaperId} 
-              onBack={() => setActivePaperId(null)} 
-            />
-          ) : (
-            <Dashboard 
-              user={user} 
-              onOpenPaper={setActivePaperId} 
-            />
-          )
-        )}
+        {renderCurrentView()}
       </main>
     </div>
   );
