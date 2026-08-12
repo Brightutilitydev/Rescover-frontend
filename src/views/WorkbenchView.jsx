@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { ArrowLeft, Save, Loader2, MessageSquare, FileText, Lock, Unlock, Send, PenTool, History, Plus, Users, UserMinus, X, Trash2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, MessageSquare, FileText, Lock, Unlock, Send, PenTool, History, Plus, Users, UserMinus, X, Trash2, ShieldCheck, Globe } from 'lucide-react';
 
 const API_BASE_URL = 'https://rescover-backend.onrender.com';
 const WS_BASE_URL = 'wss://rescover-backend.onrender.com';
