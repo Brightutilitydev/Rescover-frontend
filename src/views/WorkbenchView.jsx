@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { ArrowLeft, Save, Loader2, MessageSquare, FileText, Lock, Unlock, Send, PenTool, History, Plus, Users, UserMinus, X, Trash2, ShieldCheck, Globe } from 'lucide-react';
 
+const API_BASE_URL = '[https://rescover-backend.onrender.com](https://rescover-backend.onrender.com)';
 const WS_BASE_URL = 'wss://rescover-backend.onrender.com';
 
 const CORE_SECTIONS = ['abstract', 'chapter_1', 'chapter_2'];
@@ -14,24 +15,26 @@ export default function WorkbenchView({ user, paperId, onBack }) {
   const [activeUsers, setActiveUsers] = useState([]);
   const ws = useRef(null);
   
-  const [sidebarTab, setSidebarTab] = useState('chat');
+  const [sidebarTab, setSidebarTab] = useState('chat'); 
   const [newChat, setNewChat] = useState('');
   const chatEndRef = useRef(null);
 
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [showTeamModal, setShowTeamModal] = useState(false);
+  
+  const [isValidating, setIsValidating] = useState(false);
 
   const fetchPaper = async () => {
     try {
-      const res = await axios.get(`/api/papers/${paperId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/papers/${paperId}`);
       setPaper(prev => {
         if (!prev) return res.data;
         const dbPaper = res.data;
         const updated = { ...dbPaper };
-
+        
         if (dbPaper.title_locked_by === user.fullname) updated.title = prev.title;
-
+        
         if (dbPaper.sections && prev.sections) {
           updated.sections = dbPaper.sections.map(dbSec => {
             const isLockedByMe = dbPaper[`${dbSec.id}_locked_by`] === user.fullname;
@@ -44,9 +47,7 @@ export default function WorkbenchView({ user, paperId, onBack }) {
         }
         return updated;
       });
-    } catch (err) {
-      console.error('Failed to fetch paper:', err);
-    }
+    } catch (err) {}
   };
 
   useEffect(() => {
@@ -72,89 +73,72 @@ export default function WorkbenchView({ user, paperId, onBack }) {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      await axios.put(`/api/papers/${paperId}/sync`, {
+      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/sync`, {
         title: paper.title, sections: paper.sections, user_fullname: user.fullname
       });
       setLastSynced(new Date().toLocaleTimeString());
       triggerGlobalRefresh();
-    } catch (err) {
-      console.error('Failed to sync paper:', err);
-    } finally {
-      setIsSyncing(false);
-    }
+    } catch (err) { } finally { setIsSyncing(false); }
   };
   
-  // Phase 4: Publish Job
   const handlePublish = async () => {
     if (!window.confirm("Warning: Publishing will permanently freeze this document. No further edits can be made, and it will be visible in the public directory. Proceed?")) return;
     setIsPublishing(true);
     try {
-      await axios.put(`/api/papers/${paperId}/sync`, { title: paper.title, sections: paper.sections, user_fullname: user.fullname });
-      await axios.put(`/api/papers/${paperId}/status`, { status: 'published', user_fullname: user.fullname });
-      fetchPaper();
-      triggerGlobalRefresh();
-    } catch (err) {
-      console.error('Failed to publish paper:', err);
-    } finally {
-      setIsPublishing(false);
-    }
+      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/sync`, { title: paper.title, sections: paper.sections, user_fullname: user.fullname });
+      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/status`, { status: "published", user_fullname: user.fullname });
+      fetchPaper(); triggerGlobalRefresh();
+    } catch (err) {} finally { setIsPublishing(false); }
   };
 
   const toggleLock = async (sectionKey, claim) => {
     try {
-      await axios.post(`/api/papers/${paperId}/lock`, { section: sectionKey, user_fullname: claim ? user.fullname : null });
-      fetchPaper();
-      triggerGlobalRefresh();
-    } catch (err) {
-      console.error('Failed to toggle lock:', err);
-    }
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/lock`, { section: sectionKey, user_fullname: claim ? user.fullname : null });
+      fetchPaper(); triggerGlobalRefresh();
+    } catch (err) {}
   };
 
   const handleSendChat = async (e) => {
     e.preventDefault(); if (!newChat.trim()) return;
     try {
-      await axios.post(`/api/papers/${paperId}/chat`, { author: user.fullname, text: newChat });
-      setNewChat('');
-      fetchPaper();
-      triggerGlobalRefresh();
-    } catch (err) {
-      console.error('Failed to send chat:', err);
-    }
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/chat`, { author: user.fullname, text: newChat });
+      setNewChat(''); fetchPaper(); triggerGlobalRefresh();
+    } catch (err) {}
   };
 
   const handleAddSection = async (e) => {
     e.preventDefault();
     if (!newSectionTitle.trim()) return;
     try {
-      await axios.post(`/api/papers/${paperId}/sections`, { title: newSectionTitle, user_fullname: user.fullname });
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/sections`, { title: newSectionTitle, user_fullname: user.fullname });
       setNewSectionTitle(''); setIsAddingSection(false);
       fetchPaper();
-      triggerGlobalRefresh();
-    } catch (err) {
-      console.error('Failed to add section:', err);
-    }
+    } catch (err) {}
   };
 
   const handleDeleteSection = async (sectionId, sectionTitle) => {
     if (!window.confirm(`Are you sure you want to permanently delete the section "${sectionTitle}"? This cannot be undone.`)) return;
     try {
-      await axios.post(`/api/papers/${paperId}/sections/${sectionId}/delete`, { user_fullname: user.fullname });
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/sections/${sectionId}/delete`, { user_fullname: user.fullname });
       fetchPaper();
-      triggerGlobalRefresh();
-    } catch (err) {
-      console.error('Failed to delete section:', err);
-    }
+    } catch (err) {}
   };
 
   const removeCoAuthor = async (authorName) => {
     if (!window.confirm(`Revoke access for ${authorName}? They will be removed immediately.`)) return;
     try {
-      await axios.post(`/api/papers/${paperId}/remove-coauthor`, { user_fullname: authorName, admin_name: user.fullname });
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/remove-coauthor`, { user_fullname: authorName, admin_name: user.fullname });
       fetchPaper();
-      triggerGlobalRefresh();
-    } catch (err) {
-      console.error('Failed to remove co-author:', err);
-    }
+    } catch (err) {}
+  };
+
+  const handleVerifyOriginality = async () => {
+    setIsValidating(true);
+    try {
+      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/sync`, { title: paper.title, sections: paper.sections, user_fullname: user.fullname });
+      await axios.get(`${API_BASE_URL}/api/papers/${paperId}/verify`);
+      fetchPaper(); triggerGlobalRefresh();
+    } catch (err) { } finally { setIsValidating(false); }
   };
 
   if (!paper) return <div className="py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-teal-600" /></div>;
@@ -187,20 +171,16 @@ export default function WorkbenchView({ user, paperId, onBack }) {
         <div className="flex justify-between items-center mb-2">
           <label className={`text-xs font-bold uppercase tracking-widest ${isMe ? 'text-teal-700' : 'text-slate-500'}`}>{label}</label>
           <div className="flex items-center space-x-2">
-            
-            {/* Phase 4: Hide locks completely if published */}
             {!isPublished && (
               isOther ? <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold uppercase flex items-center"><Lock className="h-3 w-3 mr-1" /> Locked by {lockedBy}</span>
               : isMe ? <button onClick={() => toggleLock(sectionId, false)} className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-200 px-3 py-1 rounded font-bold uppercase transition flex items-center shadow-sm"><Unlock className="h-3 w-3 mr-1" /> Release</button>
               : <button onClick={() => toggleLock(sectionId, true)} className="text-[10px] bg-slate-100 text-slate-600 hover:bg-teal-600 hover:text-white px-3 py-1 rounded font-bold uppercase transition flex items-center"><PenTool className="h-3 w-3 mr-1" /> Claim</button>
             )}
-            
             {canDelete && (
               <button onClick={() => handleDeleteSection(sectionId, label)} title="Delete Section" className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition">
                 <Trash2 className="h-4 w-4" />
               </button>
             )}
-
           </div>
         </div>
         {isTitle ? (
@@ -226,15 +206,11 @@ export default function WorkbenchView({ user, paperId, onBack }) {
         </div>
         
         <div className="flex items-center space-x-4">
-          
-          {/* TEAM MANAGEMENT & PUBLISH BUTTONS (Admin Only) */}
           {isOwner && !isPublished && (
             <>
               <button onClick={() => setShowTeamModal(true)} className="hidden sm:flex items-center space-x-2 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
                 <Users className="h-4 w-4" /><span>Manage Team ({paper.co_authors?.length || 0})</span>
               </button>
-              
-              {/* Phase 4 Publish Action */}
               <button onClick={handlePublish} disabled={isPublishing} className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-500 transition shadow-sm">
                 {isPublishing ? <Loader2 className="h-4 w-4 animate-spin"/> : <Globe className="h-4 w-4" />}<span>Finalize & Publish</span>
               </button>
@@ -262,6 +238,7 @@ export default function WorkbenchView({ user, paperId, onBack }) {
 
       <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
         
+        {/* LEFT PANE */}
         <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden relative">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center space-x-2"><FileText className="h-4 w-4 text-slate-500" /><span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Manuscript Sections</span></div>
@@ -292,11 +269,13 @@ export default function WorkbenchView({ user, paperId, onBack }) {
           </div>
         </div>
 
+        {/* RIGHT PANE: Chat / Audit / Verify */}
         <div className="w-full lg:w-[400px] bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
           <div className="bg-slate-900 px-2 py-2 flex items-center justify-between">
-            <div className="flex space-x-1">
-              <button onClick={() => setSidebarTab('chat')} className={`px-4 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-2 transition ${sidebarTab === 'chat' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}><MessageSquare className="h-4 w-4" /><span>Live Chat</span></button>
-              <button onClick={() => setSidebarTab('audit')} className={`px-4 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-2 transition ${sidebarTab === 'audit' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}><History className="h-4 w-4" /><span>Activity Log</span></button>
+            <div className="flex space-x-1 overflow-x-auto">
+              <button onClick={() => setSidebarTab('chat')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition whitespace-nowrap ${sidebarTab === 'chat' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}><MessageSquare className="h-4 w-4" /><span>Live Chat</span></button>
+              <button onClick={() => setSidebarTab('audit')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition whitespace-nowrap ${sidebarTab === 'audit' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}><History className="h-4 w-4" /><span>Log</span></button>
+              <button onClick={() => setSidebarTab('verify')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition whitespace-nowrap ${sidebarTab === 'verify' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><ShieldCheck className="h-4 w-4" /><span>Verify</span></button>
             </div>
             {!isPublished && (
               <div className="flex items-center space-x-2 mr-2">
@@ -334,7 +313,9 @@ export default function WorkbenchView({ user, paperId, onBack }) {
                 <button type="submit" disabled={!newChat.trim()} className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-500 disabled:opacity-50"><Send className="h-4 w-4 ml-0.5" /></button>
               </form>
             </>
-          ) : (
+          ) : null}
+
+          {sidebarTab === 'audit' && (
             <div className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-3">
               {(!paper.audit_log || paper.audit_log.length === 0) && <div className="text-center text-sm text-slate-400 py-10 italic">No activity recorded yet.</div>}
               {paper.audit_log?.slice().reverse().map(log => (
@@ -346,6 +327,39 @@ export default function WorkbenchView({ user, paperId, onBack }) {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {sidebarTab === 'verify' && (
+            <div className="flex-1 p-6 overflow-y-auto bg-slate-50 flex flex-col items-center text-center space-y-4">
+              <div className="h-16 w-16 bg-indigo-100 rounded-full flex items-center justify-center mb-2">
+                <ShieldCheck className="h-8 w-8 text-indigo-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Originality Engine</h3>
+              <p className="text-xs text-slate-500">N-Gram algorithms verify structural gap coverage and flag identical topic saturation across the database.</p>
+              
+              {paper.plagiarism_score > 0 ? (
+                <div className={`w-full p-5 rounded-xl border mt-2 shadow-sm ${paper.plagiarism_score <= 20 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Calculated Safety Score</p>
+                  <h4 className={`text-4xl font-black ${paper.plagiarism_score <= 20 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {(100 - paper.plagiarism_score).toFixed(1)}%
+                  </h4>
+                  <p className={`text-xs font-bold mt-2 ${paper.plagiarism_score <= 20 ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {paper.plagiarism_score <= 20 ? "Validation Passed: Manuscript is highly original." : "Warning: Excessive overlap detected in database!"}
+                  </p>
+                </div>
+              ) : (
+                <div className="w-full p-4 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-sm font-medium mt-2">
+                  No scan recorded.
+                </div>
+              )}
+
+              {!isPublished && isOwner && (
+                <button onClick={handleVerifyOriginality} disabled={isValidating} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm shadow-sm transition flex justify-center items-center space-x-2 disabled:opacity-50 mt-auto">
+                  {isValidating ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+                  <span>{isValidating ? "Scanning Algorithms..." : "Run Integrity Scan"}</span>
+                </button>
+              )}
             </div>
           )}
         </div>

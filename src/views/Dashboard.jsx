@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, FileText, Globe, Loader2, Compass, UserPlus, CheckCircle2, Bell, Users, X, Award } from 'lucide-react';
 
+const API_BASE_URL = '[https://rescover-backend.onrender.com](https://rescover-backend.onrender.com)';
+
 export default function Dashboard({ user, onOpenPaper }) {
   const [activeTab, setActiveTab] = useState('drafts');
   const [papers, setPapers] = useState({ drafts: [], discover: [], in_review: [], published: [] });
   const [notifications, setNotifications] = useState([]);
-  const [scholars, setScholars] = useState([]); // Phase 4 Directory
+  const [scholars, setScholars] = useState([]); 
   
   const [showNotifs, setShowNotifs] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,47 +17,36 @@ export default function Dashboard({ user, onOpenPaper }) {
   const [isCreating, setIsCreating] = useState(false);
   const [uploadMode, setUploadMode] = useState(false);
   
-  // Phase 4 Portfolio Modal States
   const [selectedScholar, setSelectedScholar] = useState(null);
   const [scholarPortfolio, setScholarPortfolio] = useState([]);
   const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(false);
 
   const fetchPapers = async () => {
     try {
-      const res = await axios.get(`/api/papers?user_name=${encodeURIComponent(user.fullname)}`);
+      const res = await axios.get(`${API_BASE_URL}/api/papers?user_name=${encodeURIComponent(user.fullname)}`);
       setPapers(res.data);
-    } catch (err) {
-      console.error('Failed to load papers:', err);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (err) { } finally { setIsLoading(false); }
   };
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get(`/api/notifications/${encodeURIComponent(user.fullname)}`);
+      const res = await axios.get(`${API_BASE_URL}/api/notifications/${encodeURIComponent(user.fullname)}`);
       setNotifications(res.data);
-    } catch (err) {
-      console.error('Failed to load notifications:', err);
-    }
+    } catch (err) { }
   };
 
   const fetchScholars = async () => {
     try {
-      const res = await axios.get('/api/scholars');
+      const res = await axios.get(`${API_BASE_URL}/api/scholars`);
       setScholars(res.data);
-    } catch (err) {
-      console.error('Failed to load scholars:', err);
-    }
+    } catch (err) { }
   };
 
-  // Phase 4 FIX: Background Polling for real-time updates on Dashboard
   useEffect(() => {
     fetchPapers();
     fetchNotifications();
     fetchScholars();
     
-    // Refresh data every 5 seconds silently so users see approvals instantly
     const interval = setInterval(() => {
       fetchPapers();
       fetchNotifications();
@@ -66,12 +57,8 @@ export default function Dashboard({ user, onOpenPaper }) {
   }, [user]);
 
   const markRead = async (id) => {
-    try {
-      await axios.put(`/api/notifications/${id}/read`);
-      fetchNotifications();
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err);
-    }
+    await axios.put(`${API_BASE_URL}/api/notifications/${id}/read`);
+    fetchNotifications();
   };
 
   const handleCreateResearch = async (e) => {
@@ -80,10 +67,10 @@ export default function Dashboard({ user, onOpenPaper }) {
 
     setIsCreating(true);
     try {
-      const res = await axios.post('/api/papers/create', { title: newTitle.trim(), author_name: user.fullname });
+      const res = await axios.post(`${API_BASE_URL}/api/papers/create`, { title: newTitle.trim(), author_name: user.fullname });
 
       if (uploadMode) {
-        await axios.put(`/api/papers/${res.data.paper.id}/status`, {
+        await axios.put(`${API_BASE_URL}/api/papers/${res.data.paper.id}/status`, {
           status: 'published',
           user_fullname: user.fullname,
         });
@@ -104,42 +91,32 @@ export default function Dashboard({ user, onOpenPaper }) {
   const handleRequestJoin = async (paperId, e) => {
     e.stopPropagation();
     try {
-      await axios.post(`/api/papers/${paperId}/request-join`, { user_fullname: user.fullname });
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/request-join`, { user_fullname: user.fullname });
       fetchPapers();
-    } catch (err) {
-      console.error('Failed to request co-author access:', err);
-    }
+    } catch (err) { }
   };
 
   const handleApproveJoin = async (paperId, requesterName, e) => {
     e.stopPropagation();
     try {
-      await axios.post(`/api/papers/${paperId}/approve-join`, { user_fullname: requesterName });
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/approve-join`, { user_fullname: requesterName });
       fetchPapers();
-    } catch (err) {
-      console.error('Failed to approve co-author request:', err);
-    }
+    } catch (err) { }
   };
 
-  // Phase 4 Portfolio Viewer
   const handleViewScholar = async (scholarName) => {
     setSelectedScholar(scholarName);
     setIsLoadingPortfolio(true);
     try {
-      const res = await axios.get(`/api/scholars/${encodeURIComponent(scholarName)}/portfolio`);
+      const res = await axios.get(`${API_BASE_URL}/api/scholars/${encodeURIComponent(scholarName)}/portfolio`);
       setScholarPortfolio(res.data);
-    } catch (err) {
-      console.error('Failed to load scholar portfolio:', err);
-    } finally {
-      setIsLoadingPortfolio(false);
-    }
+    } catch (err) { } finally { setIsLoadingPortfolio(false); }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6">
-      {/* Header Area */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Research Hub</h2>
@@ -183,7 +160,6 @@ export default function Dashboard({ user, onOpenPaper }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex space-x-2 border-b border-slate-200 overflow-x-auto">
         <TabButton active={activeTab === 'drafts'} onClick={() => setActiveTab('drafts')} icon={FileText} label="My Workspace" count={papers.drafts.length} />
         <TabButton active={activeTab === 'discover'} onClick={() => setActiveTab('discover')} icon={Compass} label="Discover Projects" count={papers.discover.length} />
@@ -196,7 +172,6 @@ export default function Dashboard({ user, onOpenPaper }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
-          {/* SCHOLAR DIRECTORY TAB */}
           {activeTab === 'scholars' ? (
              scholars.length === 0 ? (
                <div className="col-span-full py-12 text-center text-slate-500 bg-white border border-slate-200 border-dashed rounded-xl">No scholars found.</div>
@@ -215,7 +190,6 @@ export default function Dashboard({ user, onOpenPaper }) {
                ))
              )
           ) : (
-            /* PAPERS TABS */
             papers[activeTab].length === 0 ? (
               <div className="col-span-full py-12 text-center text-slate-500 bg-white border border-slate-200 border-dashed rounded-xl">No documents found in this category.</div>
             ) : (
@@ -260,7 +234,6 @@ export default function Dashboard({ user, onOpenPaper }) {
         </div>
       )}
 
-      {/* SCHOLAR PORTFOLIO MODAL */}
       {selectedScholar && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
@@ -300,7 +273,6 @@ export default function Dashboard({ user, onOpenPaper }) {
         </div>
       )}
 
-      {/* CREATE PAPER MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">

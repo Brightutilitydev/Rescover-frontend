@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { ShieldCheck, Loader2, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Loader2 } from 'lucide-react';
 
-const API_BASE_URL = 'https://rescover-backend.onrender.com';
+const API_BASE_URL = '[https://rescover-backend.onrender.com](https://rescover-backend.onrender.com)';
 
 export default function AuthGateway({ isRegistering, onAuthSuccess }) {
   const [formData, setFormData] = useState({ fullname: '', email: '', password: '' });
