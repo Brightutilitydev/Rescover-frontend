@@ -305,7 +305,19 @@ export default function WorkbenchView({ user, paperId, onBack }) {
             )}
           </div>
           
-          {sidebarTab === 'chat' ? (
+          {isPublished ? (
+            <div className="flex-1 p-4 overflow-y-auto bg-slate-50">
+              <div className="flex h-full items-center justify-center text-center">
+                <div className="max-w-xs">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <ShieldCheck className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-800">Published work is read-only</p>
+                  <p className="mt-2 text-xs text-slate-500">Chat and collaborative editing are disabled for published documents.</p>
+                </div>
+              </div>
+            </div>
+          ) : sidebarTab === 'chat' ? (
             <>
               <div className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-4">
                 {(!paper.chat || paper.chat.length === 0) && <div className="text-center text-sm text-slate-400 py-10 italic">No messages yet.</div>}
@@ -317,12 +329,10 @@ export default function WorkbenchView({ user, paperId, onBack }) {
                 ))}
                 <div ref={chatEndRef} />
               </div>
-              {!isPublished && (
-                <form onSubmit={handleSendChat} className="p-3 bg-white border-t border-slate-200 flex space-x-2">
-                  <input type="text" value={newChat} onChange={e => setNewChat(e.target.value)} placeholder="Message co-authors..." className="flex-1 px-4 py-2 bg-slate-100 border-transparent rounded-full text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
-                  <button type="submit" disabled={!newChat.trim()} className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-500 disabled:opacity-50"><Send className="h-4 w-4 ml-0.5" /></button>
-                </form>
-              )}
+              <form onSubmit={handleSendChat} className="p-3 bg-white border-t border-slate-200 flex space-x-2">
+                <input type="text" value={newChat} onChange={e => setNewChat(e.target.value)} placeholder="Message co-authors..." className="flex-1 px-4 py-2 bg-slate-100 border-transparent rounded-full text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" />
+                <button type="submit" disabled={!newChat.trim()} className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-500 disabled:opacity-50"><Send className="h-4 w-4 ml-0.5" /></button>
+              </form>
             </>
           ) : (
             <div className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-3">

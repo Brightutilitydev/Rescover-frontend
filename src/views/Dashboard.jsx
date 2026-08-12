@@ -13,6 +13,7 @@ export default function Dashboard({ user, onOpenPaper }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [uploadMode, setUploadMode] = useState(false);
   
   // Phase 4 Portfolio Modal States
   const [selectedScholar, setSelectedScholar] = useState(null);
@@ -74,10 +75,24 @@ export default function Dashboard({ user, onOpenPaper }) {
   };
 
   const handleCreateResearch = async (e) => {
-    e.preventDefault(); setIsCreating(true);
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+
+    setIsCreating(true);
     try {
-      const res = await axios.post('/api/papers/create', { title: newTitle, author_name: user.fullname });
-      setNewTitle(''); setIsModalOpen(false); fetchPapers();
+      const res = await axios.post('/api/papers/create', { title: newTitle.trim(), author_name: user.fullname });
+
+      if (uploadMode) {
+        await axios.put(`/api/papers/${res.data.paper.id}/status`, {
+          status: 'published',
+          user_fullname: user.fullname,
+        });
+      }
+
+      setNewTitle('');
+      setUploadMode(false);
+      setIsModalOpen(false);
+      fetchPapers();
       onOpenPaper(res.data.paper.id);
     } catch (err) {
       console.error('Failed to create research:', err);
@@ -157,9 +172,14 @@ export default function Dashboard({ user, onOpenPaper }) {
             )}
           </div>
 
-          <button onClick={() => setIsModalOpen(true)} className="bg-teal-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-teal-500 flex items-center space-x-2 shadow-sm">
-            <Plus className="h-5 w-5" /><span>Start New Research</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { setUploadMode(false); setIsModalOpen(true); }} className="bg-teal-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-teal-500 flex items-center space-x-2 shadow-sm">
+              <Plus className="h-5 w-5" /><span>Start New Research</span>
+            </button>
+            <button onClick={() => { setUploadMode(true); setIsModalOpen(true); }} className="bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-slate-800 flex items-center space-x-2 shadow-sm">
+              <Globe className="h-4 w-4" /><span>Upload Existing Work</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -284,14 +304,26 @@ export default function Dashboard({ user, onOpenPaper }) {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Initiate Research</h3>
-            <p className="text-sm text-slate-500 mb-6">Give your new manuscript a working title. You will be set as the Lead Author.</p>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xl font-bold text-slate-900">{uploadMode ? 'Upload Existing Work' : 'Initiate Research'}</h3>
+              <button type="button" onClick={() => { setIsModalOpen(false); setUploadMode(false); setNewTitle(''); }} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="text-sm text-slate-500 mb-6">
+              {uploadMode
+                ? 'Add a published manuscript that was written outside the platform.'
+                : 'Give your new manuscript a working title. You will be set as the Lead Author.'}
+            </p>
             <form onSubmit={handleCreateResearch}>
-              <input type="text" required placeholder="e.g., The Future of ML..." value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-lg mb-6 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              <input type="text" required placeholder="e.g., The Future of ML..." value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                {uploadMode
+                  ? 'This will create a published platform entry and open it immediately.'
+                  : 'This creates a draft workspace so you can continue editing within the platform.'}
+              </div>
               <div className="flex space-x-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50">Cancel</button>
+                <button type="button" onClick={() => { setIsModalOpen(false); setUploadMode(false); setNewTitle(''); }} className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50">Cancel</button>
                 <button disabled={isCreating} type="submit" className="flex-1 py-2.5 bg-teal-600 text-white font-bold rounded-lg flex justify-center hover:bg-teal-500">
-                  {isCreating ? <Loader2 className="h-5 w-5 animate-spin" /> : "Create Draft"}
+                  {isCreating ? <Loader2 className="h-5 w-5 animate-spin" /> : (uploadMode ? 'Upload as Published' : 'Create Draft')}
                 </button>
               </div>
             </form>
