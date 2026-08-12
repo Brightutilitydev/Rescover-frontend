@@ -17,6 +17,9 @@ export default function WorkbenchView({ user, paperId, onBack }) {
   
   const [sidebarTab, setSidebarTab] = useState('chat'); 
   const [newChat, setNewChat] = useState('');
+  const [publicComments, setPublicComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [isPostingComment, setIsPostingComment] = useState(false);
   const chatEndRef = useRef(null);
 
   const [isAddingSection, setIsAddingSection] = useState(false);
@@ -47,11 +50,23 @@ export default function WorkbenchView({ user, paperId, onBack }) {
         }
         return updated;
       });
+
+      if (res.data?.comments) setPublicComments(Array.isArray(res.data.comments) ? res.data.comments : []);
     } catch (err) {}
+  };
+
+  const fetchComments = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/papers/${paperId}/comments`);
+      setPublicComments(Array.isArray(res.data) ? res.data : res.data?.comments || []);
+    } catch (err) {
+      setPublicComments([]);
+    }
   };
 
   useEffect(() => {
     fetchPaper();
+    fetchComments();
     const socketUrl = `${WS_BASE_URL}/ws/${paperId}?user=${encodeURIComponent(user.fullname)}`;
     const websocket = new WebSocket(socketUrl);
     ws.current = websocket;
@@ -59,7 +74,10 @@ export default function WorkbenchView({ user, paperId, onBack }) {
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'presence') setActiveUsers(data.users);
-      else if (data.type === 'refresh') fetchPaper();
+      else if (data.type === 'refresh') {
+        fetchPaper();
+        fetchComments();
+      }
     };
     return () => { if (websocket.readyState === 1) websocket.close(); };
   }, [paperId, user.fullname]);
@@ -104,6 +122,26 @@ export default function WorkbenchView({ user, paperId, onBack }) {
       await axios.post(`${API_BASE_URL}/api/papers/${paperId}/chat`, { author: user.fullname, text: newChat });
       setNewChat(''); fetchPaper(); triggerGlobalRefresh();
     } catch (err) {}
+  };
+
+  const handleSubmitComment = async (e) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    setIsPostingComment(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/comments`, {
+        viewer_name: user.fullname,
+        comment_text: newComment.trim(),
+      });
+      setNewComment('');
+      fetchComments();
+      triggerGlobalRefresh();
+    } catch (err) {
+      console.error('Failed to post viewer comment:', err);
+    } finally {
+      setIsPostingComment(false);
+    }
   };
 
   const handleAddSection = async (e) => {
@@ -285,16 +323,48 @@ export default function WorkbenchView({ user, paperId, onBack }) {
           </div>
           
           {isPublished ? (
-            <div className="flex-1 p-4 overflow-y-auto bg-slate-50">
-              <div className="flex h-full items-center justify-center text-center">
-                <div className="max-w-xs">
-                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                    <ShieldCheck className="h-6 w-6" />
-                  </div>
-                  <p className="text-sm font-bold text-slate-800">Published work is read-only</p>
-                  <p className="mt-2 text-xs text-slate-500">Chat and collaborative editing are disabled for published documents.</p>
+            <div className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-4">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-left">
+                <div className="flex items-center space-x-2 text-emerald-700">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Published view</span>
                 </div>
+                <p className="mt-2 text-xs text-slate-600">This paper is read-only. Reviewers can leave public comments below.</p>
               </div>
+
+              <div className="space-y-3">
+                {publicComments.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-xs text-slate-500">No public comments yet.</div>
+                ) : (
+                  publicComments.map((comment, index) => (
+                    <div key={comment.id || `${comment.viewer_name}-${comment.created_at || index}`} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-slate-700">{comment.viewer_name || 'Viewer'}</span>
+                        <span className="text-[10px] text-slate-400">{comment.created_at || 'just now'}</span>
+                      </div>
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap">{comment.comment_text || comment.text || ''}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form onSubmit={handleSubmitComment} className="mt-4 border-t border-slate-200 pt-4">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Add a public comment</label>
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                  placeholder="Share your feedback with the author..."
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                />
+                <button
+                  type="submit"
+                  disabled={isPostingComment || !newComment.trim()}
+                  className="mt-3 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {isPostingComment ? 'Posting...' : 'Post Comment'}
+                </button>
+              </form>
             </div>
           ) : sidebarTab === 'chat' ? (
             <>

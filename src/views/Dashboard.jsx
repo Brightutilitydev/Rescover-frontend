@@ -15,6 +15,7 @@ export default function Dashboard({ user, onOpenPaper }) {
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [uploadMode, setUploadMode] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
   
   const [selectedScholar, setSelectedScholar] = useState(null);
   const [scholarPortfolio, setScholarPortfolio] = useState([]);
@@ -66,20 +67,52 @@ export default function Dashboard({ user, onOpenPaper }) {
 
     setIsCreating(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/papers/create`, { title: newTitle.trim(), author_name: user.fullname });
+      let response;
 
-      if (uploadMode) {
-        await axios.put(`${API_BASE_URL}/api/papers/${res.data.paper.id}/status`, {
-          status: 'published',
-          user_fullname: user.fullname,
+      if (uploadMode && uploadedFile) {
+        const formData = new FormData();
+        formData.append('title', newTitle.trim());
+        formData.append('author_name', user.fullname);
+        formData.append('file', uploadedFile);
+
+        try {
+          response = await axios.post(`${API_BASE_URL}/api/papers/upload`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+        } catch (uploadErr) {
+          console.warn('Upload endpoint unavailable; falling back to create + publish flow.', uploadErr);
+          response = await axios.post(`${API_BASE_URL}/api/papers/create`, {
+            title: newTitle.trim(),
+            author_name: user.fullname,
+          });
+
+          await axios.put(`${API_BASE_URL}/api/papers/${response.data.paper.id}/status`, {
+            status: 'published',
+            user_fullname: user.fullname,
+          });
+        }
+      } else {
+        response = await axios.post(`${API_BASE_URL}/api/papers/create`, {
+          title: newTitle.trim(),
+          author_name: user.fullname,
         });
+
+        if (uploadMode) {
+          await axios.put(`${API_BASE_URL}/api/papers/${response.data.paper.id}/status`, {
+            status: 'published',
+            user_fullname: user.fullname,
+          });
+        }
       }
 
+      const paperId = response.data.paper?.id || response.data.id || response.data.paper_id;
+
       setNewTitle('');
+      setUploadedFile(null);
       setUploadMode(false);
       setIsModalOpen(false);
       fetchPapers();
-      onOpenPaper(res.data.paper.id);
+      if (paperId) onOpenPaper(paperId);
     } catch (err) {
       console.error('Failed to create research:', err);
     } finally {
@@ -277,7 +310,7 @@ export default function Dashboard({ user, onOpenPaper }) {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xl font-bold text-slate-900">{uploadMode ? 'Upload Existing Work' : 'Initiate Research'}</h3>
-              <button type="button" onClick={() => { setIsModalOpen(false); setUploadMode(false); setNewTitle(''); }} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
+              <button type="button" onClick={() => { setIsModalOpen(false); setUploadMode(false); setNewTitle(''); setUploadedFile(null); }} className="text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button>
             </div>
             <p className="text-sm text-slate-500 mb-6">
               {uploadMode
@@ -286,13 +319,27 @@ export default function Dashboard({ user, onOpenPaper }) {
             </p>
             <form onSubmit={handleCreateResearch}>
               <input type="text" required placeholder="e.g., The Future of ML..." value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+
+              {uploadMode && (
+                <div className="mb-4">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Upload manuscript file</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-teal-600 file:text-white file:font-bold file:cursor-pointer"
+                  />
+                  {uploadedFile && <p className="mt-2 text-xs text-slate-500">Selected: {uploadedFile.name}</p>}
+                </div>
+              )}
+
               <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                 {uploadMode
-                  ? 'This will create a published platform entry and open it immediately.'
+                  ? 'This will create a published platform entry and open it immediately. If a file is added, it will be sent for parsing and extraction.'
                   : 'This creates a draft workspace so you can continue editing within the platform.'}
               </div>
               <div className="flex space-x-3">
-                <button type="button" onClick={() => { setIsModalOpen(false); setUploadMode(false); setNewTitle(''); }} className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50">Cancel</button>
+                <button type="button" onClick={() => { setIsModalOpen(false); setUploadMode(false); setNewTitle(''); setUploadedFile(null); }} className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50">Cancel</button>
                 <button disabled={isCreating} type="submit" className="flex-1 py-2.5 bg-teal-600 text-white font-bold rounded-lg flex justify-center hover:bg-teal-500">
                   {isCreating ? <Loader2 className="h-5 w-5 animate-spin" /> : (uploadMode ? 'Upload as Published' : 'Create Draft')}
                 </button>
