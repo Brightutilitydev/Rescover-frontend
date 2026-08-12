@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { ArrowLeft, Save, Loader2, MessageSquare, FileText, Lock, Unlock, Send, PenTool, History, Plus, Users, UserMinus, X, Trash2, ShieldCheck, Globe } from 'lucide-react';
 
-const API_BASE_URL = 'https://rescover-backend.onrender.com';
 const WS_BASE_URL = 'wss://rescover-backend.onrender.com';
 
 const CORE_SECTIONS = ['abstract', 'chapter_1', 'chapter_2'];
@@ -25,14 +24,14 @@ export default function WorkbenchView({ user, paperId, onBack }) {
 
   const fetchPaper = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/papers/${paperId}`);
+      const res = await axios.get(`/api/papers/${paperId}`);
       setPaper(prev => {
         if (!prev) return res.data;
         const dbPaper = res.data;
         const updated = { ...dbPaper };
-        
+
         if (dbPaper.title_locked_by === user.fullname) updated.title = prev.title;
-        
+
         if (dbPaper.sections && prev.sections) {
           updated.sections = dbPaper.sections.map(dbSec => {
             const isLockedByMe = dbPaper[`${dbSec.id}_locked_by`] === user.fullname;
@@ -45,7 +44,9 @@ export default function WorkbenchView({ user, paperId, onBack }) {
         }
         return updated;
       });
-    } catch (err) {}
+    } catch (err) {
+      console.error('Failed to fetch paper:', err);
+    }
   };
 
   useEffect(() => {
@@ -71,12 +72,16 @@ export default function WorkbenchView({ user, paperId, onBack }) {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/sync`, {
+      await axios.put(`/api/papers/${paperId}/sync`, {
         title: paper.title, sections: paper.sections, user_fullname: user.fullname
       });
       setLastSynced(new Date().toLocaleTimeString());
       triggerGlobalRefresh();
-    } catch (err) { } finally { setIsSyncing(false); }
+    } catch (err) {
+      console.error('Failed to sync paper:', err);
+    } finally {
+      setIsSyncing(false);
+    }
   };
   
   // Phase 4: Publish Job
@@ -84,53 +89,72 @@ export default function WorkbenchView({ user, paperId, onBack }) {
     if (!window.confirm("Warning: Publishing will permanently freeze this document. No further edits can be made, and it will be visible in the public directory. Proceed?")) return;
     setIsPublishing(true);
     try {
-      // Force sync any final changes
-      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/sync`, { title: paper.title, sections: paper.sections, user_fullname: user.fullname });
-      // Update status
-      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/status`, { status: "published", user_fullname: user.fullname });
-      fetchPaper(); triggerGlobalRefresh();
-    } catch (err) {} finally { setIsPublishing(false); }
+      await axios.put(`/api/papers/${paperId}/sync`, { title: paper.title, sections: paper.sections, user_fullname: user.fullname });
+      await axios.put(`/api/papers/${paperId}/status`, { status: 'published', user_fullname: user.fullname });
+      fetchPaper();
+      triggerGlobalRefresh();
+    } catch (err) {
+      console.error('Failed to publish paper:', err);
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const toggleLock = async (sectionKey, claim) => {
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/lock`, { section: sectionKey, user_fullname: claim ? user.fullname : null });
-      fetchPaper(); triggerGlobalRefresh();
-    } catch (err) {}
+      await axios.post(`/api/papers/${paperId}/lock`, { section: sectionKey, user_fullname: claim ? user.fullname : null });
+      fetchPaper();
+      triggerGlobalRefresh();
+    } catch (err) {
+      console.error('Failed to toggle lock:', err);
+    }
   };
 
   const handleSendChat = async (e) => {
     e.preventDefault(); if (!newChat.trim()) return;
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/chat`, { author: user.fullname, text: newChat });
-      setNewChat(''); fetchPaper(); triggerGlobalRefresh();
-    } catch (err) {}
+      await axios.post(`/api/papers/${paperId}/chat`, { author: user.fullname, text: newChat });
+      setNewChat('');
+      fetchPaper();
+      triggerGlobalRefresh();
+    } catch (err) {
+      console.error('Failed to send chat:', err);
+    }
   };
 
   const handleAddSection = async (e) => {
     e.preventDefault();
     if (!newSectionTitle.trim()) return;
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/sections`, { title: newSectionTitle, user_fullname: user.fullname });
+      await axios.post(`/api/papers/${paperId}/sections`, { title: newSectionTitle, user_fullname: user.fullname });
       setNewSectionTitle(''); setIsAddingSection(false);
       fetchPaper();
-    } catch (err) {}
+      triggerGlobalRefresh();
+    } catch (err) {
+      console.error('Failed to add section:', err);
+    }
   };
 
   const handleDeleteSection = async (sectionId, sectionTitle) => {
     if (!window.confirm(`Are you sure you want to permanently delete the section "${sectionTitle}"? This cannot be undone.`)) return;
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/sections/${sectionId}/delete`, { user_fullname: user.fullname });
+      await axios.post(`/api/papers/${paperId}/sections/${sectionId}/delete`, { user_fullname: user.fullname });
       fetchPaper();
-    } catch (err) {}
+      triggerGlobalRefresh();
+    } catch (err) {
+      console.error('Failed to delete section:', err);
+    }
   };
 
   const removeCoAuthor = async (authorName) => {
     if (!window.confirm(`Revoke access for ${authorName}? They will be removed immediately.`)) return;
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/remove-coauthor`, { user_fullname: authorName, admin_name: user.fullname });
+      await axios.post(`/api/papers/${paperId}/remove-coauthor`, { user_fullname: authorName, admin_name: user.fullname });
       fetchPaper();
-    } catch (err) {}
+      triggerGlobalRefresh();
+    } catch (err) {
+      console.error('Failed to remove co-author:', err);
+    }
   };
 
   if (!paper) return <div className="py-20 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-teal-600" /></div>;

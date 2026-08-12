@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Microscope, LogOut } from 'lucide-react';
 import AuthGateway from './views/AuthGateway';
 import Dashboard from './views/Dashboard';
 import WorkbenchView from './views/WorkbenchView';
+
+const API_BASE_URL = 'https://rescover-backend.onrender.com';
+axios.defaults.baseURL = API_BASE_URL;
 
 export default function App() {
   const [user, setUser] = useState(() => {
@@ -17,8 +21,13 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (user) localStorage.setItem('rescover_user', JSON.stringify(user));
-    else localStorage.removeItem('rescover_user');
+    if (user) {
+      localStorage.setItem('rescover_user', JSON.stringify(user));
+      axios.defaults.headers.common.Authorization = user.token ? `Bearer ${user.token}` : undefined;
+    } else {
+      localStorage.removeItem('rescover_user');
+      delete axios.defaults.headers.common.Authorization;
+    }
   }, [user]);
 
   useEffect(() => {

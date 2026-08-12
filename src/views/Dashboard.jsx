@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Plus, FileText, Globe, Loader2, Compass, UserPlus, CheckCircle2, Bell, Users, X, Award } from 'lucide-react';
 
-const API_BASE_URL = 'https://rescover-backend.onrender.com';
-
 export default function Dashboard({ user, onOpenPaper }) {
   const [activeTab, setActiveTab] = useState('drafts');
   const [papers, setPapers] = useState({ drafts: [], discover: [], in_review: [], published: [] });
@@ -23,23 +21,31 @@ export default function Dashboard({ user, onOpenPaper }) {
 
   const fetchPapers = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/papers?user_name=${encodeURIComponent(user.fullname)}`);
+      const res = await axios.get(`/api/papers?user_name=${encodeURIComponent(user.fullname)}`);
       setPapers(res.data);
-    } catch (err) { } finally { setIsLoading(false); }
+    } catch (err) {
+      console.error('Failed to load papers:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/notifications/${encodeURIComponent(user.fullname)}`);
+      const res = await axios.get(`/api/notifications/${encodeURIComponent(user.fullname)}`);
       setNotifications(res.data);
-    } catch (err) { }
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+    }
   };
 
   const fetchScholars = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/scholars`);
+      const res = await axios.get('/api/scholars');
       setScholars(res.data);
-    } catch (err) { }
+    } catch (err) {
+      console.error('Failed to load scholars:', err);
+    }
   };
 
   // Phase 4 FIX: Background Polling for real-time updates on Dashboard
@@ -59,33 +65,45 @@ export default function Dashboard({ user, onOpenPaper }) {
   }, [user]);
 
   const markRead = async (id) => {
-    await axios.put(`${API_BASE_URL}/api/notifications/${id}/read`);
-    fetchNotifications();
+    try {
+      await axios.put(`/api/notifications/${id}/read`);
+      fetchNotifications();
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
   };
 
   const handleCreateResearch = async (e) => {
     e.preventDefault(); setIsCreating(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/papers/create`, { title: newTitle, author_name: user.fullname });
+      const res = await axios.post('/api/papers/create', { title: newTitle, author_name: user.fullname });
       setNewTitle(''); setIsModalOpen(false); fetchPapers();
-      onOpenPaper(res.data.paper.id); // Auto-open after creating
-    } catch (err) { } finally { setIsCreating(false); }
+      onOpenPaper(res.data.paper.id);
+    } catch (err) {
+      console.error('Failed to create research:', err);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleRequestJoin = async (paperId, e) => {
     e.stopPropagation();
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/request-join`, { user_fullname: user.fullname });
+      await axios.post(`/api/papers/${paperId}/request-join`, { user_fullname: user.fullname });
       fetchPapers();
-    } catch (err) { }
+    } catch (err) {
+      console.error('Failed to request co-author access:', err);
+    }
   };
 
   const handleApproveJoin = async (paperId, requesterName, e) => {
     e.stopPropagation();
     try {
-      await axios.post(`${API_BASE_URL}/api/papers/${paperId}/approve-join`, { user_fullname: requesterName });
+      await axios.post(`/api/papers/${paperId}/approve-join`, { user_fullname: requesterName });
       fetchPapers();
-    } catch (err) { }
+    } catch (err) {
+      console.error('Failed to approve co-author request:', err);
+    }
   };
 
   // Phase 4 Portfolio Viewer
@@ -93,9 +111,13 @@ export default function Dashboard({ user, onOpenPaper }) {
     setSelectedScholar(scholarName);
     setIsLoadingPortfolio(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/scholars/${encodeURIComponent(scholarName)}/portfolio`);
+      const res = await axios.get(`/api/scholars/${encodeURIComponent(scholarName)}/portfolio`);
       setScholarPortfolio(res.data);
-    } catch (err) { } finally { setIsLoadingPortfolio(false); }
+    } catch (err) {
+      console.error('Failed to load scholar portfolio:', err);
+    } finally {
+      setIsLoadingPortfolio(false);
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
