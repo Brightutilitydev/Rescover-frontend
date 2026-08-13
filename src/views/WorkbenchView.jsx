@@ -162,6 +162,55 @@ export default function WorkbenchView({ user, paperId, onBack }) {
     } catch (err) {}
   };
 
+  const togglePaperPrivacy = async () => {
+    if (!isOwner) return;
+    const nextPrivateState = !Boolean(paper.is_private);
+    const confirmed = window.confirm(nextPrivateState
+      ? 'Make this work private so co-author requests are paused?'
+      : 'Make this work public again so new co-author requests can be sent?');
+    if (!confirmed) return;
+
+    try {
+      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/privacy`, {
+        user_fullname: user.fullname,
+        is_private: nextPrivateState,
+      });
+      fetchPaper();
+      triggerGlobalRefresh();
+    } catch (err) {
+      try {
+        await axios.post(`${API_BASE_URL}/api/papers/${paperId}/privacy`, {
+          user_fullname: user.fullname,
+          is_private: nextPrivateState,
+        });
+        fetchPaper();
+        triggerGlobalRefresh();
+      } catch (fallbackErr) {
+        console.error('Failed to toggle paper privacy:', fallbackErr);
+      }
+    }
+  };
+
+  const deletePaper = async () => {
+    if (!isOwner) return;
+    const confirmed = window.confirm(`Delete "${paper.title}" permanently from the database? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      await axios.delete(`${API_BASE_URL}/api/papers/${paperId}`, {
+        data: { user_fullname: user.fullname },
+      });
+      onBack();
+    } catch (err) {
+      try {
+        await axios.post(`${API_BASE_URL}/api/papers/${paperId}/delete`, { user_fullname: user.fullname });
+        onBack();
+      } catch (fallbackErr) {
+        console.error('Failed to delete paper from database:', fallbackErr);
+      }
+    }
+  };
+
   const removeCoAuthor = async (authorName) => {
     if (!window.confirm(`Revoke access for ${authorName}? They will be removed immediately.`)) return;
     try {
@@ -183,6 +232,7 @@ export default function WorkbenchView({ user, paperId, onBack }) {
 
   const isOwner = paper.owner_name === user.fullname;
   const isPublished = paper.status === 'published';
+  const isPrivate = Boolean(paper.is_private);
   const holdsAnyLock = paper.title_locked_by === user.fullname || paper.sections?.some(s => paper[`${s.id}_locked_by`] === user.fullname);
 
   const renderSection = (sectionId, label, isTitle = false) => {
@@ -239,18 +289,25 @@ export default function WorkbenchView({ user, paperId, onBack }) {
           <div className="flex items-center space-x-3">
             <h2 className="text-2xl font-black text-slate-900 tracking-tight">Structured Workspace</h2>
             {isOwner && !isPublished && <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase rounded tracking-wider">Admin</span>}
+            {isPrivate && !isPublished && <span className="px-2 py-0.5 bg-slate-800 text-white text-[10px] font-bold uppercase rounded tracking-wider flex items-center"><Lock className="h-3 w-3 mr-1"/> Private</span>}
             {isPublished && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase rounded tracking-wider flex items-center"><ShieldCheck className="h-3 w-3 mr-1"/> Published</span>}
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           {isOwner && !isPublished && (
             <>
+              <button onClick={togglePaperPrivacy} className="hidden sm:flex items-center space-x-2 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
+                {isPrivate ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}<span>{isPrivate ? 'Make Public' : 'Make Private'}</span>
+              </button>
               <button onClick={() => setShowTeamModal(true)} className="hidden sm:flex items-center space-x-2 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
                 <Users className="h-4 w-4" /><span>Manage Team ({paper.co_authors?.length || 0})</span>
               </button>
               <button onClick={handlePublish} disabled={isPublishing} className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-500 transition shadow-sm">
                 {isPublishing ? <Loader2 className="h-4 w-4 animate-spin"/> : <Globe className="h-4 w-4" />}<span>Finalize & Publish</span>
+              </button>
+              <button onClick={deletePaper} className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-500 transition shadow-sm">
+                <Trash2 className="h-4 w-4" /><span>Delete</span>
               </button>
             </>
           )}

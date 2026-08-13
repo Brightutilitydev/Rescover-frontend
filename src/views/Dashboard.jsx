@@ -136,6 +136,51 @@ export default function Dashboard({ user, onOpenPaper }) {
     } catch (err) { }
   };
 
+  const handleTogglePaperPrivacy = async (paperId, isCurrentlyPrivate, e) => {
+    e.stopPropagation();
+    const action = isCurrentlyPrivate ? 'make public again' : 'make it private';
+    const confirmed = window.confirm(`This work will ${action}. Continue?`);
+    if (!confirmed) return;
+
+    try {
+      await axios.put(`${API_BASE_URL}/api/papers/${paperId}/privacy`, {
+        user_fullname: user.fullname,
+        is_private: !isCurrentlyPrivate,
+      });
+      fetchPapers();
+    } catch (err) {
+      try {
+        await axios.post(`${API_BASE_URL}/api/papers/${paperId}/privacy`, {
+          user_fullname: user.fullname,
+          is_private: !isCurrentlyPrivate,
+        });
+        fetchPapers();
+      } catch (fallbackErr) {
+        console.error('Failed to update privacy status:', fallbackErr);
+      }
+    }
+  };
+
+  const handleDeletePaper = async (paperId, title, e) => {
+    e.stopPropagation();
+    const confirmed = window.confirm(`Delete "${title}" permanently from the database? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      await axios.delete(`${API_BASE_URL}/api/papers/${paperId}`, {
+        data: { user_fullname: user.fullname },
+      });
+      fetchPapers();
+    } catch (err) {
+      try {
+        await axios.post(`${API_BASE_URL}/api/papers/${paperId}/delete`, { user_fullname: user.fullname });
+        fetchPapers();
+      } catch (fallbackErr) {
+        console.error('Failed to delete paper:', fallbackErr);
+      }
+    }
+  };
+
   const handleViewScholar = async (scholarName) => {
     setSelectedScholar(scholarName);
     setIsLoadingPortfolio(true);
@@ -228,15 +273,37 @@ export default function Dashboard({ user, onOpenPaper }) {
               papers[activeTab].map((paper) => (
                 <div key={paper.id} onClick={() => (activeTab === 'drafts' || activeTab === 'published') && onOpenPaper(paper.id)} className={`bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between transition-colors ${(activeTab === 'drafts' || activeTab === 'published') ? 'cursor-pointer hover:border-teal-400 hover:shadow-md' : ''}`}>
                   <div>
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="flex justify-between items-start mb-2 gap-2">
                       <div className="text-[10px] font-bold uppercase tracking-widest text-teal-600">{paper.status.replace('_', ' ')}</div>
-                      {activeTab === 'drafts' && paper.owner_name === user.fullname && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Owner</span>}
-                      {activeTab === 'drafts' && paper.owner_name !== user.fullname && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Co-Author</span>}
+                      <div className="flex items-center gap-1 flex-wrap justify-end">
+                        {activeTab === 'drafts' && paper.owner_name === user.fullname && <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Owner</span>}
+                        {activeTab === 'drafts' && paper.owner_name !== user.fullname && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Co-Author</span>}
+                        {paper.is_private && <span className="text-[9px] bg-slate-800 text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider">Private</span>}
+                      </div>
                     </div>
                     <h3 className="font-bold text-slate-900 leading-tight mb-3">{paper.title}</h3>
                     <p className="text-xs text-slate-500 mb-1">Lead Author: <span className="font-semibold text-slate-700">{paper.owner_name}</span></p>
                     {paper.co_authors && paper.co_authors.length > 0 && <p className="text-xs text-slate-500">Team: <span className="text-slate-600">{paper.co_authors.join(', ')}</span></p>}
                   </div>
+
+                  {activeTab === 'drafts' && paper.owner_name === user.fullname && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => handleTogglePaperPrivacy(paper.id, Boolean(paper.is_private), e)}
+                        className="flex-1 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-[11px] font-bold rounded"
+                      >
+                        {paper.is_private ? 'Make Public' : 'Make Private'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeletePaper(paper.id, paper.title, e)}
+                        className="flex-1 py-2 bg-red-50 text-red-600 hover:bg-red-100 text-[11px] font-bold rounded"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
 
                   {activeTab === 'discover' && (
                     <div className="mt-4 pt-4 border-t border-slate-100">
